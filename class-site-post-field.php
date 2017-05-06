@@ -16,15 +16,39 @@ class RWMB_Site_Post_Field extends RWMB_Post_Field {
 	 * @return array
 	 */
 	public static function normalize( $field ) {
+
+		$no_placeholder = ( !isset($field['placeholder']) || empty($field['placeholder']) ) ? true : false;
+
 		// Set default field args.
 		$field = parent::normalize( $field );
-		$field = wp_parse_args( $field, array(
-			'site'			=> get_current_blog_id(),
-		) );
 
-		if ( ! isset( $field['site'] ) && is_numeric( $field['site'] ) ) {
+		if ( isset( $field['site'] ) && is_numeric( $field['site'] ) ) {
 			$field['site'] = intval( $field['site'] );
+		}elseif( isset( $field['blog_id'] ) && is_numeric( $field['blog_id']  )){
+			$field['site'] = intval( $field['blog_id'] );
+			unset( $field['blog_id'] );
+		}else{
+			$field['site'] = get_current_blog_id();
 		}
+
+		/**
+		 * Set default placeholder.
+		 * - If multiple post types: show 'Select a post'.
+		 * - If single post type: show 'Select a %post_type_name%'.
+		 */
+		if ( $no_placeholder ) {
+
+			switch_to_blog($field['site']);
+
+			if ( is_string( $field['query_args']['post_type'] ) && post_type_exists( $field['query_args']['post_type'] ) ) {
+				$post_type_object = get_post_type_object( $field['query_args']['post_type'] );
+				// Translators: %s is the post type singular label.
+				$field['placeholder'] = sprintf( __( 'Select a %s', 'meta-box' ), $post_type_object->labels->singular_name );
+			}
+
+			restore_current_blog();
+		}
+
 
 		return $field;
 	}
@@ -44,7 +68,7 @@ class RWMB_Site_Post_Field extends RWMB_Post_Field {
 	 */
 	public static function meta( $post_id, $saved, $field ) {
 
-		switch_to_blog(intval($field['site']));
+		switch_to_blog($field['site']);
 
 		if ( isset( $field['parent'] ) && $field['parent'] ) {
 			$post = get_post( $post_id );
@@ -66,7 +90,8 @@ class RWMB_Site_Post_Field extends RWMB_Post_Field {
 	 * @return array
 	 */
 	public static function get_options( $field ) {
-		switch_to_blog(intval($field['site']));
+
+		switch_to_blog($field['site']);
 
 		$query = new WP_Query( $field['query_args'] );
 		$result = $query->have_posts() ? $query->posts : array();
